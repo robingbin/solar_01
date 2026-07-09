@@ -1,0 +1,152 @@
+{
+  "project_name": "Solar Credit Tracker",
+  "app_type": "dashboard",
+  "theme": "light_and_dark",
+  "typography": {
+    "primary_font": "Plus Jakarta Sans",
+    "fallback_font": "sans-serif",
+    "headings": {
+      "h1": "text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-white",
+      "h2": "text-2xl md:text-3xl font-semibold tracking-tight text-slate-800 dark:text-slate-100",
+      "h3": "text-xl font-medium text-slate-800 dark:text-slate-100",
+      "kpi_value": "text-4xl font-bold tracking-tight text-slate-900 dark:text-white"
+    },
+    "body": "text-base text-slate-600 dark:text-slate-400",
+    "labels": "text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider",
+    "kpi_unit": "text-sm font-medium text-slate-500 dark:text-slate-400 ml-1"
+  },
+  "colors": {
+    "light": {
+      "background": "#F8FAFC",
+      "foreground": "#0F172A",
+      "sidebar_bg_start": "#0a1a35",
+      "sidebar_bg_end": "#0f1e3d",
+      "sidebar_text": "#F1F5F9",
+      "card": "#FFFFFF",
+      "card_foreground": "#0F172A",
+      "border": "#E2E8F0",
+      "primary": "#3B82F6",
+      "primary_foreground": "#FFFFFF",
+      "header_gradient_start": "#F8FAFC",
+      "header_gradient_mid": "#FEF3C7",
+      "header_gradient_end": "#FFEDD5",
+      "status": {
+        "export_bg": "#D1FAE5",
+        "export_icon": "#10B981",
+        "import_bg": "#FEE2E2",
+        "import_icon": "#EF4444",
+        "net_bg": "#DBEAFE",
+        "net_icon": "#3B82F6",
+        "credit_bg": "#FEF3C7",
+        "credit_icon": "#F59E0B"
+      }
+    },
+    "dark": {
+      "background": "#020617",
+      "foreground": "#F8FAFC",
+      "sidebar_bg_start": "#020617",
+      "sidebar_bg_end": "#0F172A",
+      "sidebar_text": "#F8FAFC",
+      "card": "#0F172A",
+      "card_foreground": "#F8FAFC",
+      "border": "#1E293B",
+      "primary": "#3B82F6",
+      "primary_foreground": "#FFFFFF",
+      "header_gradient_start": "#020617",
+      "header_gradient_mid": "#0F172A",
+      "header_gradient_end": "#1E293B",
+      "status": {
+        "export_bg": "rgba(16, 185, 129, 0.2)",
+        "export_icon": "#34D399",
+        "import_bg": "rgba(239, 68, 68, 0.2)",
+        "import_icon": "#F87171",
+        "net_bg": "rgba(59, 130, 246, 0.2)",
+        "net_icon": "#60A5FA",
+        "credit_bg": "rgba(245, 158, 11, 0.2)",
+        "credit_icon": "#FBBF24"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "card": "shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]",
+      "hover": "shadow-[0_8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
+    },
+    "border_radius": {
+      "card": "rounded-2xl",
+      "button": "rounded-lg",
+      "icon_container": "rounded-full"
+    },
+    "glassmorphism": {
+      "header": "backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border-b border-slate-200/50 dark:border-slate-800/50"
+    }
+  },
+  "layouts": {
+    "app_shell": "flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950",
+    "sidebar": "w-64 flex-shrink-0 bg-gradient-to-b from-[#0a1a35] to-[#0f1e3d] text-white flex flex-col transition-all duration-300",
+    "main_content": "flex-1 flex flex-col h-screen overflow-y-auto",
+    "header": "h-16 flex items-center justify-between px-6 sticky top-0 z-40 bg-gradient-to-r from-slate-50 via-amber-50/30 to-orange-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 backdrop-blur-md border-b border-slate-200 dark:border-slate-800",
+    "dashboard_grid": {
+      "kpi_row": "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6",
+      "main_split": "grid grid-cols-1 lg:grid-cols-3 gap-6",
+      "left_column": "lg:col-span-2 space-y-6",
+      "right_column": "lg:col-span-1 space-y-6"
+    }
+  },
+  "components": {
+    "kpi_card": "bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.2)] border border-slate-100 dark:border-slate-800 flex flex-col gap-2",
+    "icon_circle": "w-10 h-10 rounded-full flex items-center justify-center mb-2",
+    "form_card": "bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800",
+    "shadcn_overrides": {
+      "card": "border-none shadow-none bg-transparent",
+      "input": "rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-visible:ring-primary h-11",
+      "button": "rounded-lg h-10 px-4 font-medium transition-all active:scale-95"
+    }
+  },
+  "motion": {
+    "page_transition": "animate-in fade-in slide-in-from-bottom-4 duration-500",
+    "card_hover": "transition-all duration-300 hover:-translate-y-1 hover:shadow-lg",
+    "button_active": "active:scale-95 transition-transform duration-150"
+  },
+  "accessibility": {
+    "focus_ring": "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+    "contrast": "Ensure text meets WCAG AA standards (4.5:1 for normal text). Use text-slate-700 for light mode body, text-slate-300 for dark mode.",
+    "testing": "All interactive elements MUST include data-testid attribute formatted as kebab-case-role."
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/20157010/pexels-photo-20157010.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Professional male avatar for user profile in settings/header",
+        "category": "avatar"
+      }
+    ],
+    "icons": "Use lucide-react. Include Sun for logo, TrendingUp, TrendingDown, Zap, Battery, History, Settings, Download."
+  },
+  "instructions_to_main_agent": [
+    "Install Google Font 'Plus Jakarta Sans' via index.css import or next/font.",
+    "The UI MUST match the reference layout: Sidebar on left (dark navy #0f1e3d gradient with Sun icon logo). Main area on right.",
+    "Dashboard layout: Top row is 6 KPI cards (Current Credit, Today's Export, Today's Import, Net Today, Monthly Export, Estimated Savings).",
+    "Below KPIs: Split layout. Left is 'Add New Reading' dual-column form card. Right is 'Credit Trend' Chart.js graph and 'Today's Summary'.",
+    "Cards MUST be rounded-2xl, white (or slate-900 in dark mode), with soft shadows, NOT harsh borders.",
+    "KPI icons must be circular and colored: Green for export, Red for import, Blue for Net, Yellow/Orange for Credit.",
+    "Add 'Units' text softly next to large KPI numbers.",
+    "Use Chart.js (react-chartjs-2) for analytics (Bars for Export/Import, Line for Net Credit).",
+    "Implement Sonner for toast notifications.",
+    "Include loading skeleton states for dashboard cards before data mounts.",
+    "Do not use generic Inter font. Apply Plus Jakarta Sans universally.",
+    "For all Shadcn components (tables, dialogs, forms), ensure they use standard React/Tailwind .js or .jsx (not tsx). Override default Shadcn styles to match the rounded, soft-shadow modern glass UI vibe."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Do not make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy and soft box-shadows.",
+    "Use glass-morphism effects carefully with backdrop filters (12-24px blur) where appropriate (like the header).",
+    "You MUST NOT apply universal transition like 'transition: all'. Add transitions explicitly.",
+    "You MUST NOT center align the app container (.App { text-align: center; }).",
+    "Every interaction needs micro-animations (hover states, active scaling).",
+    "Use generous padding (p-5, p-6) in cards so they don't look cramped.",
+    "All interactive elements MUST include a data-testid attribute for robust testing.",
+    "Use sonner for toast notifications."
+  ]
+}
