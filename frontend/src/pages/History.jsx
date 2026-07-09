@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { toast } from "sonner";
@@ -195,6 +195,7 @@ const History = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Reading Detail</DialogTitle>
+            <DialogDescription>Full breakdown of the selected reading.</DialogDescription>
           </DialogHeader>
           {viewing && (
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -218,6 +219,7 @@ const History = () => {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Reading</DialogTitle>
+            <DialogDescription>Update the meter values below. Running totals recompute automatically.</DialogDescription>
           </DialogHeader>
           {editing && (
             <ReadingForm
