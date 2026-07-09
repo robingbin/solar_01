@@ -99,7 +99,7 @@ class TestBillingCycles:
 
     # ---------- close bill successfully ----------
     def test_05_close_bill_success(self, session):
-        current = session.get(f"{API}/billing", timeout=TIMEOUT).json()["current"]
+        _ = session.get(f"{API}/billing", timeout=TIMEOUT).json()["current"]
         end_date = date.today().isoformat()
         payload = {"end_date": end_date, "notes": "TEST cycle close"}
         r = session.post(f"{API}/billing/close", json=payload, timeout=TIMEOUT)
