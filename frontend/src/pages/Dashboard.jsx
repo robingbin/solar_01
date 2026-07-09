@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Zap, TrendingUp, TrendingDown, Activity, Sun, Wallet,
-  Plus, FileBarChart2, Download, Save,
+  Plus, FileBarChart2, Download, Save, Receipt, CheckCircle2, Clock,
 } from "lucide-react";
 import { http } from "@/lib/api";
 import { fmtUnits, fmtSigned, fmtDate } from "@/lib/format";
@@ -278,6 +278,11 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Billing status */}
+          {kpis.billing?.current && (
+            <BillingStatusCard billing={kpis.billing} onOpen={() => nav("/billing")} />
+          )}
+
           {/* Quick actions */}
           <div
             className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
@@ -331,6 +336,96 @@ const QuickBtn = ({ icon: Icon, label, onClick, tone, testId }) => {
       <Icon size={16} />
       <span>{label}</span>
     </button>
+  );
+};
+
+const BillingStatusCard = ({ billing, onOpen }) => {
+  const c = billing.current;
+  const last = billing.last_closed;
+  const overdue = c.days_elapsed > c.cycle_target_days;
+  const progressPct = Math.min(100, Math.round((c.days_elapsed / c.cycle_target_days) * 100));
+
+  const statusText = overdue ? "Overdue" : "Open";
+  const statusClasses = overdue
+    ? "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300"
+    : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300";
+
+  return (
+    <div
+      className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+      data-testid="billing-status-card"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
+            <Receipt size={18} className="text-blue-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+            Current Bill
+          </h3>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide ${statusClasses}`}
+          data-testid="dashboard-billing-status-pill"
+        >
+          {overdue ? <Clock size={12} /> : <CheckCircle2 size={12} />}
+          {statusText}
+        </span>
+      </div>
+
+      <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        Since {fmtDate(c.start_date)} · Day {c.days_elapsed} of ~{c.cycle_target_days}
+      </div>
+
+      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-4">
+        <div
+          className={`h-full ${overdue ? "bg-rose-500" : "bg-gradient-to-r from-emerald-500 to-blue-500"}`}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <MiniStat label="Export" value={fmtUnits(c.total_export)} tone="emerald" />
+        <MiniStat label="Import" value={fmtUnits(c.total_import)} tone="rose" />
+        <MiniStat label="Net" value={fmtUnits(c.net_credit)} tone="blue" />
+      </div>
+
+      {last && (
+        <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 p-3 mb-3">
+          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
+            Previous Bill · Closed
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-700 dark:text-slate-200">{fmtDate(last.end_date)}</span>
+            <span className={`font-bold mono ${last.closing_credit >= 0 ? "text-blue-600" : "text-rose-500"}`}>
+              {fmtUnits(last.closing_credit)} Units
+            </span>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={onOpen}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 transition-colors"
+        data-testid="dashboard-billing-open-btn"
+      >
+        <Receipt size={14} /> Manage Billing
+      </button>
+    </div>
+  );
+};
+
+const MiniStat = ({ label, value, tone }) => {
+  const tones = {
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    rose: "text-rose-500",
+    blue: "text-blue-600 dark:text-blue-400",
+  };
+  return (
+    <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 px-2 py-2 text-center">
+      <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</div>
+      <div className={`text-sm font-bold mono ${tones[tone]}`}>{value}</div>
+    </div>
   );
 };
 

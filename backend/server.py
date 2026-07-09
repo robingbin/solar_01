@@ -41,6 +41,7 @@ db = client[DB_NAME]
 
 READINGS = db["readings"]
 SETTINGS = db["settings"]
+BILLING = db["billing_cycles"]
 
 app = FastAPI(title="Solar Credit Tracker API", version="1.0.0")
 api = APIRouter(prefix="/api")
@@ -410,6 +411,7 @@ async def dashboard():
             "avg_daily_net": 0,
             "recent": [],
             "settings": settings_doc,
+            "billing": None,
         }
 
     latest = readings[-1]
@@ -445,6 +447,16 @@ async def dashboard():
     trend = readings[-30:]
     recent = list(reversed(readings))[:5]
 
+    # Current billing cycle snapshot
+    current_cycle = await _ensure_open_cycle()
+    cycle_stats = await _cycle_totals(current_cycle["start_date"], None)
+    start_dt = date_cls.fromisoformat(current_cycle["start_date"])
+    days_elapsed = max(0, (date_cls.today() - start_dt).days)
+    cycle_target_days = 60
+    last_closed = await BILLING.find_one(
+        {"closed": True}, {"_id": 0}, sort=[("end_date", -1)]
+    )
+
     return {
         "current_credit": _round(current_credit),
         "todays_export": _round(latest["export_unit"]),
@@ -465,6 +477,16 @@ async def dashboard():
         "avg_daily_net": _round(avg_daily_export - avg_daily_import),
         "recent": recent,
         "settings": settings_doc,
+        "billing": {
+            "current": {
+                **current_cycle,
+                **cycle_stats,
+                "days_elapsed": days_elapsed,
+                "days_remaining": max(0, cycle_target_days - days_elapsed),
+                "cycle_target_days": cycle_target_days,
+            },
+            "last_closed": last_closed,
+        },
     }
 
 
@@ -557,6 +579,182 @@ async def monthly_report(
 
 
 # ---------------------------------------------------------------------------
+# Billing cycles (bimonthly TNEB bill support)
+# ---------------------------------------------------------------------------
+
+
+async def _cycle_totals(start_date: str, end_date: Optional[str]) -> Dict[str, float]:
+    """Sum export/import units within a cycle date range (inclusive)."""
+    query: Dict[str, Any] = {"date": {"$gte": start_date}}
+    if end_date:
+        query["date"]["$lte"] = end_date
+    cursor = READINGS.find(query, {"_id": 0}).sort("date", 1)
+    rows = await cursor.to_list(length=100000)
+    total_export = sum(r["export_unit"] for r in rows)
+    total_import = sum(r["import_unit"] for r in rows)
+    return {
+        "total_export": _round(total_export),
+        "total_import": _round(total_import),
+        "net_credit": _round(total_export - total_import),
+        "entries": len(rows),
+        "latest_reading_date": rows[-1]["date"] if rows else None,
+    }
+
+
+async def _ensure_open_cycle() -> Dict[str, Any]:
+    """Ensure there is always exactly one open cycle. Returns it."""
+    current = await BILLING.find_one({"closed": False}, {"_id": 0})
+    if current:
+        return current
+
+    # Start from the earliest reading date, or today.
+    first_reading = await READINGS.find_one({}, {"_id": 0}, sort=[("date", 1)])
+    start = first_reading["date"] if first_reading else date_cls.today().isoformat()
+
+    cycle = {
+        "id": str(uuid.uuid4()),
+        "start_date": start,
+        "end_date": None,
+        "closed": False,
+        "closing_export": 0.0,
+        "closing_import": 0.0,
+        "closing_credit": 0.0,
+        "closed_at": None,
+        "notes": "",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await BILLING.insert_one(dict(cycle))
+    return cycle
+
+
+@api.get("/billing")
+async def billing_overview():
+    current = await _ensure_open_cycle()
+    stats = await _cycle_totals(current["start_date"], None)
+    today = date_cls.today()
+    start_dt = date_cls.fromisoformat(current["start_date"])
+    days_elapsed = max(0, (today - start_dt).days)
+    # TNEB bimonthly ~ 60 days; expose as a soft target so UI can render progress.
+    cycle_target_days = 60
+    days_remaining = max(0, cycle_target_days - days_elapsed)
+
+    past_cursor = BILLING.find({"closed": True}, {"_id": 0}).sort("end_date", -1)
+    past = await past_cursor.to_list(length=200)
+
+    return {
+        "current": {
+            **current,
+            **stats,
+            "days_elapsed": days_elapsed,
+            "days_remaining": days_remaining,
+            "cycle_target_days": cycle_target_days,
+        },
+        "past": past,
+    }
+
+
+class CloseBillIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    end_date: Optional[str] = None  # defaults to today
+    notes: Optional[str] = ""
+
+
+@api.post("/billing/close")
+async def close_current_bill(payload: CloseBillIn):
+    current = await _ensure_open_cycle()
+
+    end_date = payload.end_date or date_cls.today().isoformat()
+    try:
+        end_dt = date_cls.fromisoformat(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid end_date. Use YYYY-MM-DD.")
+
+    start_dt = date_cls.fromisoformat(current["start_date"])
+    if end_dt < start_dt:
+        raise HTTPException(
+            status_code=400,
+            detail=f"End date ({end_date}) is before cycle start ({current['start_date']}).",
+        )
+
+    stats = await _cycle_totals(current["start_date"], end_date)
+
+    update = {
+        "closed": True,
+        "end_date": end_date,
+        "closing_export": stats["total_export"],
+        "closing_import": stats["total_import"],
+        "closing_credit": stats["net_credit"],
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+        "notes": payload.notes or "",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "entries": stats["entries"],
+    }
+    await BILLING.update_one({"id": current["id"]}, {"$set": update})
+
+    # Open next cycle starting the day after end_date.
+    next_start = (end_dt + timedelta(days=1)).isoformat()
+    new_cycle = {
+        "id": str(uuid.uuid4()),
+        "start_date": next_start,
+        "end_date": None,
+        "closed": False,
+        "closing_export": 0.0,
+        "closing_import": 0.0,
+        "closing_credit": 0.0,
+        "closed_at": None,
+        "notes": "",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await BILLING.insert_one(dict(new_cycle))
+
+    closed = await BILLING.find_one({"id": current["id"]}, {"_id": 0})
+    return {"closed": closed, "next": new_cycle}
+
+
+class CycleUpdateIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@api.put("/billing/cycles/{cycle_id}")
+async def update_cycle(cycle_id: str, payload: CycleUpdateIn):
+    cycle = await BILLING.find_one({"id": cycle_id}, {"_id": 0})
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Cycle not found")
+
+    update: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if payload.start_date:
+        update["start_date"] = payload.start_date
+    if payload.end_date and cycle.get("closed"):
+        update["end_date"] = payload.end_date
+        stats = await _cycle_totals(
+            update.get("start_date", cycle["start_date"]), payload.end_date
+        )
+        update["closing_export"] = stats["total_export"]
+        update["closing_import"] = stats["total_import"]
+        update["closing_credit"] = stats["net_credit"]
+    if payload.notes is not None:
+        update["notes"] = payload.notes
+
+    await BILLING.update_one({"id": cycle_id}, {"$set": update})
+    return await BILLING.find_one({"id": cycle_id}, {"_id": 0})
+
+
+@api.delete("/billing/cycles/{cycle_id}")
+async def delete_cycle(cycle_id: str):
+    result = await BILLING.delete_one({"id": cycle_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Cycle not found")
+    # Ensure at least one open cycle remains.
+    await _ensure_open_cycle()
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
 # Backup / restore / seed / wipe
 # ---------------------------------------------------------------------------
 
@@ -565,11 +763,13 @@ async def monthly_report(
 async def backup():
     readings = await _all_readings_sorted()
     settings_doc = await _get_settings_doc()
+    cycles = await BILLING.find({}, {"_id": 0}).sort("start_date", 1).to_list(length=1000)
     return {
-        "version": 1,
+        "version": 2,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "readings": readings,
         "settings": settings_doc,
+        "billing_cycles": cycles,
     }
 
 
@@ -577,6 +777,7 @@ async def backup():
 async def restore(payload: Dict[str, Any]):
     readings = payload.get("readings") or []
     settings_payload = payload.get("settings")
+    cycles_payload = payload.get("billing_cycles")
 
     if not isinstance(readings, list):
         raise HTTPException(status_code=400, detail="`readings` must be a list.")
@@ -600,6 +801,18 @@ async def restore(payload: Dict[str, Any]):
         await SETTINGS.update_one(
             {"id": "singleton"}, {"$set": settings_payload}, upsert=True
         )
+
+    if isinstance(cycles_payload, list):
+        await BILLING.delete_many({})
+        cleaned_cycles: List[Dict[str, Any]] = []
+        for c in cycles_payload:
+            c = dict(c)
+            c.pop("_id", None)
+            c.setdefault("id", str(uuid.uuid4()))
+            cleaned_cycles.append(c)
+        if cleaned_cycles:
+            await BILLING.insert_many(cleaned_cycles)
+    await _ensure_open_cycle()
 
     return {"success": True, "restored": len(readings)}
 
@@ -652,12 +865,16 @@ async def seed_data(days: int = 30):
             initial_export=8000.00,
             initial_import=12300.00,
         )
+    # Reset billing cycles on seed and open a fresh cycle spanning the sample data.
+    await BILLING.delete_many({})
+    await _ensure_open_cycle()
     return {"success": True, "count": len(docs)}
 
 
 @api.delete("/wipe")
 async def wipe_all(keep_settings: bool = True):
     await READINGS.delete_many({})
+    await BILLING.delete_many({})
     if not keep_settings:
         await SETTINGS.delete_many({})
     return {"success": True}
