@@ -10,6 +10,7 @@ import Settings from "@/pages/Settings";
 import Backup from "@/pages/Backup";
 import About from "@/pages/About";
 import Billing from "@/pages/Billing";
+import Solar from "@/pages/Solar";
 import { ThemeProvider } from "@/context/ThemeContext";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
               <Route path="/history" element={<History />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/solar" element={<Solar />} />
               <Route path="/billing" element={<Billing />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/backup" element={<Backup />} />

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Zap, TrendingUp, TrendingDown, Activity, Sun, Wallet,
   Plus, FileBarChart2, Download, Save, Receipt, CheckCircle2, Clock,
+  Sparkles, Home,
 } from "lucide-react";
 import { http } from "@/lib/api";
 import { fmtUnits, fmtSigned, fmtDate } from "@/lib/format";
@@ -119,6 +120,51 @@ const Dashboard = () => {
         />
       </div>
 
+      {/* Solar KPI row - only if user is tracking solar */}
+      {kpis.solar?.has_solar && (
+        <div
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          data-testid="solar-kpi-grid"
+        >
+          <KpiCard
+            testId="kpi-todays-solar"
+            label="Today's Solar"
+            value={fmtUnits(kpis.solar.todays_solar)}
+            icon={Sun}
+            tone="credit"
+            subtitle="Inverter generation"
+            loading={loading}
+          />
+          <KpiCard
+            testId="kpi-todays-self"
+            label="Self Consumption"
+            value={fmtUnits(kpis.solar.todays_self_consumption)}
+            icon={Sparkles}
+            tone="net"
+            subtitle="Solar used at home today"
+            loading={loading}
+          />
+          <KpiCard
+            testId="kpi-todays-house"
+            label="Today's House Use"
+            value={fmtUnits(kpis.solar.todays_house_consumption)}
+            icon={Home}
+            tone="purple"
+            subtitle="Self + grid import"
+            loading={loading}
+          />
+          <KpiCard
+            testId="kpi-total-solar"
+            label="Total Solar"
+            value={fmtUnits(kpis.solar.total_solar)}
+            icon={Sun}
+            tone="credit"
+            subtitle={`Across ${kpis.solar.tracked_days} days`}
+            loading={loading}
+          />
+        </div>
+      )}
+
       {/* MAIN SPLIT */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
@@ -139,7 +185,7 @@ const Dashboard = () => {
                 onClick={() => nav("/history")}
                 data-testid="view-all-readings-btn"
               >
-                View All Readings →
+                View All Readings â
               </Button>
             </div>
 
@@ -274,7 +320,7 @@ const Dashboard = () => {
               <SummaryRow label="Today's Import" value={`${fmtUnits(kpis.todays_import)} Units`} tone="import" />
               <SummaryRow label="Net Today" value={`${fmtSigned(kpis.net_today)} Units`} tone="net" />
               <SummaryRow label="Credit After Entry" value={`${fmtUnits(kpis.current_credit)} Units`} tone="credit" />
-              <SummaryRow label="Monthly Savings" value={`₹ ${fmtUnits(kpis.estimated_monthly_savings)}`} tone="purple" />
+              <SummaryRow label="Monthly Savings" value={`â¹ ${fmtUnits(kpis.estimated_monthly_savings)}`} tone="purple" />
             </div>
           </div>
 
@@ -430,3 +476,4 @@ const MiniStat = ({ label, value, tone }) => {
 };
 
 export default Dashboard;
+

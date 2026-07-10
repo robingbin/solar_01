@@ -28,11 +28,17 @@ const ReadingForm = ({ onSaved, editing }) => {
   const [currentImport, setCurrentImport] = useState(
     editing ? String(editing.current_import) : "",
   );
+  const [currentSolar, setCurrentSolar] = useState(
+    editing && editing.current_solar ? String(editing.current_solar) : "",
+  );
   const [notes, setNotes] = useState(editing?.notes || "");
   const [prev, setPrev] = useState(null);
+  const [prevSolar, setPrevSolar] = useState(null);
   const [needsInit, setNeedsInit] = useState(false);
+  const [needsInitSolar, setNeedsInitSolar] = useState(false);
   const [initExport, setInitExport] = useState("");
   const [initImport, setInitImport] = useState("");
+  const [initSolar, setInitSolar] = useState("");
   const [saving, setSaving] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -42,11 +48,15 @@ const ReadingForm = ({ onSaved, editing }) => {
         previous_export: editing.previous_export,
         previous_import: editing.previous_import,
       });
+      if (editing.has_solar) {
+        setPrevSolar(editing.previous_solar);
+      }
       setNeedsInit(false);
       return;
     }
     http.get("/readings/latest").then((r) => {
       const latest = r.data.reading;
+      const latestSolar = r.data.latest_solar_reading;
       if (latest) {
         setPrev({
           previous_export: latest.current_export,
@@ -57,29 +67,53 @@ const ReadingForm = ({ onSaved, editing }) => {
         setPrev(null);
         setNeedsInit(true);
       }
+      if (latestSolar && latestSolar.current_solar > 0) {
+        setPrevSolar(latestSolar.current_solar);
+        setNeedsInitSolar(false);
+      } else {
+        setPrevSolar(null);
+        setNeedsInitSolar(true);
+      }
     });
   }, [editing]);
 
   const eNum = parseFloat(currentExport);
   const iNum = parseFloat(currentImport);
+  const sNum = parseFloat(currentSolar);
   const prevE = prev?.previous_export ?? parseFloat(initExport) ?? 0;
   const prevI = prev?.previous_import ?? parseFloat(initImport) ?? 0;
+  const prevS = prevSolar ?? parseFloat(initSolar) ?? 0;
 
   const todaysExport =
     !Number.isNaN(eNum) && !Number.isNaN(prevE) ? eNum - prevE : null;
   const todaysImport =
     !Number.isNaN(iNum) && !Number.isNaN(prevI) ? iNum - prevI : null;
+  const todaysSolar =
+    !Number.isNaN(sNum) && !Number.isNaN(prevS) ? sNum - prevS : null;
+  const todaysSelfConsumption =
+    todaysSolar !== null && todaysExport !== null
+      ? Math.max(0, todaysSolar - todaysExport)
+      : null;
+  const todaysHouseConsumption =
+    todaysSelfConsumption !== null && todaysImport !== null
+      ? todaysSelfConsumption + todaysImport
+      : null;
 
+  const solarProvided = currentSolar !== "";
   const invalid =
     Number.isNaN(eNum) ||
     Number.isNaN(iNum) ||
     (todaysExport !== null && todaysExport < 0) ||
     (todaysImport !== null && todaysImport < 0) ||
-    (needsInit && (!initExport || !initImport));
+    (needsInit && (!initExport || !initImport)) ||
+    (solarProvided && Number.isNaN(sNum)) ||
+    (solarProvided && todaysSolar !== null && todaysSolar < 0) ||
+    (solarProvided && needsInitSolar && !initSolar);
 
   const handleReset = () => {
     setCurrentExport(editing ? String(editing.current_export) : "");
     setCurrentImport(editing ? String(editing.current_import) : "");
+    setCurrentSolar(editing && editing.current_solar ? String(editing.current_solar) : "");
     setNotes(editing?.notes || "");
     if (!editing) setDate(todayISO());
   };
@@ -97,6 +131,12 @@ const ReadingForm = ({ onSaved, editing }) => {
       if (needsInit) {
         payload.initial_export = parseFloat(initExport);
         payload.initial_import = parseFloat(initImport);
+      }
+      if (solarProvided) {
+        payload.current_solar = sNum;
+        if (needsInitSolar) {
+          payload.initial_solar = parseFloat(initSolar);
+        }
       }
       if (editing) {
         await http.put(`/readings/${editing.id}`, payload);
@@ -290,6 +330,103 @@ const ReadingForm = ({ onSaved, editing }) => {
         </div>
       </div>
 
+      {/* Solar inverter section (optional) */}
+      <div className="rounded-xl bg-amber-50/60 dark:bg-amber-500/5 border border-amber-200/60 dark:border-amber-500/20 p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
+            <span className="text-amber-600 text-xs font-bold">☀</span>
+          </div>
+          <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+            Solar Inverter Reading
+          </span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            (Optional — enter to track daily generation)
+          </span>
+        </div>
+
+        {needsInitSolar && solarProvided && (
+          <div className="mb-3 rounded-lg bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-500/20 p-3">
+            <div className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-2">
+              First-time solar setup — enter your inverter&apos;s current total production reading
+            </div>
+            <Input
+              type="number"
+              step="0.01"
+              value={initSolar}
+              onChange={(e) => setInitSolar(e.target.value)}
+              placeholder="e.g. 12500.00 (inverter total kWh)"
+              className="h-11"
+              data-testid="reading-initial-solar-input"
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Last Solar Reading
+            </label>
+            <Input
+              type="text"
+              value={prevSolar ? fmtUnits(prevSolar) : initSolar || "-"}
+              readOnly
+              className="mt-1 h-11 bg-white dark:bg-slate-800 font-semibold mono"
+              data-testid="reading-prev-solar"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Today Solar Reading
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={currentSolar}
+              onChange={(e) => setCurrentSolar(e.target.value)}
+              placeholder="Inverter total kWh"
+              className="mt-1 h-11"
+              data-testid="reading-current-solar-input"
+            />
+          </div>
+        </div>
+
+        {solarProvided && todaysSolar !== null && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 text-xs">
+            <SolarStat
+              label="Generated"
+              value={todaysSolar}
+              tone={todaysSolar < 0 ? "rose" : "amber"}
+              testId="solar-generated-value"
+            />
+            <SolarStat
+              label="→ Grid Export"
+              value={todaysExport ?? 0}
+              tone="emerald"
+              testId="solar-exported-value"
+            />
+            <SolarStat
+              label="→ Self Used"
+              value={todaysSelfConsumption ?? 0}
+              tone="blue"
+              testId="solar-self-consumed-value"
+            />
+          </div>
+        )}
+        {solarProvided && todaysHouseConsumption !== null && (
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-amber-200/60 dark:border-amber-500/20 text-sm">
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              Total House Consumption
+            </span>
+            <span
+              className="font-bold text-slate-900 dark:text-white mono"
+              data-testid="reading-house-consumption-value"
+            >
+              {fmtUnits(todaysHouseConsumption)} Units
+            </span>
+          </div>
+        )}
+      </div>
+
       <div className="mb-5">
         <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
           Notes (optional)
@@ -335,3 +472,20 @@ const ReadingForm = ({ onSaved, editing }) => {
 };
 
 export default ReadingForm;
+
+const SolarStat = ({ label, value, tone, testId }) => {
+  const tones = {
+    amber: "text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-500/10",
+    emerald: "text-emerald-600 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-500/10",
+    blue: "text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-500/10",
+    rose: "text-rose-500 bg-rose-50/70 dark:bg-rose-500/10",
+  };
+  return (
+    <div className={`rounded-lg px-3 py-2 ${tones[tone]}`} data-testid={testId}>
+      <div className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
+        {label}
+      </div>
+      <div className="text-sm font-bold mono">{fmtUnits(value)} <span className="text-[10px] opacity-70">Units</span></div>
+    </div>
+  );
+};

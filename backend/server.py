@@ -61,9 +61,12 @@ class ReadingIn(BaseModel):
     current_export: float
     current_import: float
     notes: Optional[str] = ""
+    # Optional solar inverter reading (cumulative kWh from inverter display)
+    current_solar: Optional[float] = None
     # Optional bootstrap values used only when there is no prior reading.
     initial_export: Optional[float] = None
     initial_import: Optional[float] = None
+    initial_solar: Optional[float] = None
 
 
 class Reading(BaseModel):
@@ -81,6 +84,14 @@ class Reading(BaseModel):
     running_import: float = 0.0
     credit_unit: float = 0.0
     net_today: float = 0.0
+    # Solar inverter tracking (all optional; 0.0 if user hasn't started logging solar)
+    previous_solar: float = 0.0
+    current_solar: float = 0.0
+    solar_unit: float = 0.0
+    running_solar: float = 0.0
+    self_consumption: float = 0.0  # solar generated but consumed at home
+    house_consumption: float = 0.0  # total home usage = self_consumption + import_unit
+    has_solar: bool = False
     notes: str = ""
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
@@ -137,12 +148,17 @@ async def _all_readings_sorted() -> List[Dict[str, Any]]:
 async def _recalculate_chain(
     initial_export: Optional[float] = None,
     initial_import: Optional[float] = None,
+    initial_solar: Optional[float] = None,
 ) -> None:
     """Recompute every reading's derived fields based on date order.
 
-    When ``initial_export`` / ``initial_import`` are given they seed the very
-    first reading (used for the first-ever entry). Otherwise the first row's
-    stored ``previous_*`` values are trusted.
+    When ``initial_*`` are given they seed the very first reading (used for the
+    first-ever entry). Otherwise the first row's stored ``previous_*`` values
+    are trusted.
+
+    Solar is opt-in: only rows where ``current_solar`` > 0 count toward
+    generation. Once solar tracking starts, ``running_solar`` accumulates from
+    that point onward.
     """
 
     readings = await _all_readings_sorted()
@@ -151,12 +167,15 @@ async def _recalculate_chain(
 
     running_export = 0.0
     running_import = 0.0
+    running_solar = 0.0
     prev_export_meter: Optional[float] = None
     prev_import_meter: Optional[float] = None
+    prev_solar_meter: Optional[float] = None
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for idx, r in enumerate(readings):
+        # ---- meter chain (export/import) ----
         if idx == 0:
             if initial_export is not None:
                 r["previous_export"] = float(initial_export)
@@ -174,6 +193,45 @@ async def _recalculate_chain(
         r["running_export"] = _round(running_export)
         r["running_import"] = _round(running_import)
         r["credit_unit"] = _round(running_export - running_import)
+
+        # ---- solar chain (optional; per-row) ----
+        current_solar = float(r.get("current_solar") or 0.0)
+        has_solar_now = current_solar > 0.0
+
+        if has_solar_now:
+            if prev_solar_meter is None:
+                # First solar reading in the chain - use provided initial or
+                # stored previous_solar, else default to current so solar_unit=0.
+                if idx == 0 and initial_solar is not None:
+                    r["previous_solar"] = float(initial_solar)
+                elif not r.get("previous_solar"):
+                    r["previous_solar"] = current_solar
+            else:
+                r["previous_solar"] = prev_solar_meter
+
+            r["current_solar"] = current_solar
+            r["solar_unit"] = _round(current_solar - r["previous_solar"])
+            if r["solar_unit"] < 0:
+                r["solar_unit"] = 0.0  # guard against bad data
+            running_solar += r["solar_unit"]
+            r["running_solar"] = _round(running_solar)
+            # Self consumption = generated but not exported (kWh used directly at home)
+            self_c = max(0.0, r["solar_unit"] - r["export_unit"])
+            r["self_consumption"] = _round(self_c)
+            r["house_consumption"] = _round(self_c + r["import_unit"])
+            r["has_solar"] = True
+            prev_solar_meter = current_solar
+        else:
+            # No solar reading recorded for this row - keep continuity of totals
+            r["previous_solar"] = _round(prev_solar_meter or 0.0)
+            r["current_solar"] = _round(prev_solar_meter or 0.0)
+            r["solar_unit"] = 0.0
+            r["running_solar"] = _round(running_solar)
+            r["self_consumption"] = 0.0
+            # If no solar reading, house_consumption falls back to grid import only
+            r["house_consumption"] = _round(r["import_unit"])
+            r["has_solar"] = False
+
         r["previous_export"] = _round(r["previous_export"])
         r["previous_import"] = _round(r["previous_import"])
         r["current_export"] = _round(r["current_export"])
@@ -224,7 +282,10 @@ async def update_settings(payload: Dict[str, Any]):
 @api.get("/readings/latest")
 async def latest_reading():
     doc = await READINGS.find_one({}, {"_id": 0}, sort=[("date", -1)])
-    return {"reading": doc}
+    latest_solar = await READINGS.find_one(
+        {"current_solar": {"$gt": 0}}, {"_id": 0}, sort=[("date", -1)]
+    )
+    return {"reading": doc, "latest_solar_reading": latest_solar}
 
 
 @api.get("/readings")
@@ -312,12 +373,38 @@ async def create_reading(payload: ReadingIn):
             detail=f"Current import ({payload.current_import}) is less than previous ({prev_import}).",
         )
 
+    # Solar validation (optional field)
+    prev_solar: Optional[float] = None
+    if payload.current_solar is not None and payload.current_solar > 0:
+        # Look up latest reading that had solar tracking on
+        last_solar = await READINGS.find_one(
+            {"date": {"$lt": payload.date}, "current_solar": {"$gt": 0}},
+            {"_id": 0},
+            sort=[("date", -1)],
+        )
+        if last_solar:
+            prev_solar = float(last_solar["current_solar"])
+        else:
+            prev_solar = (
+                float(payload.initial_solar)
+                if payload.initial_solar is not None
+                else float(payload.current_solar)
+            )
+        if payload.current_solar < prev_solar:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Current solar ({payload.current_solar}) is less than previous ({prev_solar}).",
+            )
+
     reading = Reading(
         date=payload.date,
         previous_export=prev_export,
         current_export=float(payload.current_export),
         previous_import=prev_import,
         current_import=float(payload.current_import),
+        current_solar=float(payload.current_solar) if payload.current_solar else 0.0,
+        previous_solar=prev_solar if prev_solar is not None else 0.0,
+        has_solar=bool(payload.current_solar and payload.current_solar > 0),
         notes=payload.notes or "",
     )
     doc = reading.model_dump()
@@ -325,7 +412,7 @@ async def create_reading(payload: ReadingIn):
 
     # Recompute the full chain to keep running totals consistent even if
     # entries are added out of chronological order.
-    await _recalculate_chain()
+    await _recalculate_chain(initial_solar=payload.initial_solar)
 
     saved = await READINGS.find_one({"id": reading.id}, {"_id": 0})
     return saved
@@ -357,6 +444,9 @@ async def update_reading(reading_id: str, payload: ReadingIn):
         "notes": payload.notes or "",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    if payload.current_solar is not None:
+        update["current_solar"] = float(payload.current_solar)
+        update["has_solar"] = payload.current_solar > 0
     await READINGS.update_one({"id": reading_id}, {"$set": update})
 
     await _recalculate_chain()
@@ -411,6 +501,18 @@ async def dashboard():
             "avg_daily_net": 0,
             "recent": [],
             "settings": settings_doc,
+            "solar": {
+                "has_solar": False,
+                "todays_solar": 0,
+                "todays_self_consumption": 0,
+                "todays_house_consumption": 0,
+                "total_solar": 0,
+                "monthly_solar": 0,
+                "total_self_consumption": 0,
+                "total_house_consumption": 0,
+                "avg_daily_solar": 0,
+                "tracked_days": 0,
+            },
             "billing": None,
         }
 
@@ -443,6 +545,21 @@ async def dashboard():
 
     avg_daily_export = total_export / max(1, len(readings))
     avg_daily_import = total_import / max(1, len(readings))
+
+    # Solar aggregates (only meaningful if user has started tracking solar)
+    solar_rows = [r for r in readings if r.get("has_solar")]
+    total_solar = sum(r.get("solar_unit", 0.0) for r in solar_rows)
+    total_self_consumption = sum(r.get("self_consumption", 0.0) for r in solar_rows)
+    total_house_consumption = sum(r.get("house_consumption", 0.0) for r in solar_rows)
+    monthly_solar = sum(
+        r.get("solar_unit", 0.0)
+        for r in solar_rows
+        if r["date"].startswith(month_key)
+    )
+    todays_solar = latest.get("solar_unit", 0.0)
+    todays_self = latest.get("self_consumption", 0.0)
+    todays_house = latest.get("house_consumption", 0.0)
+    avg_daily_solar = total_solar / max(1, len(solar_rows)) if solar_rows else 0.0
 
     trend = readings[-30:]
     recent = list(reversed(readings))[:5]
@@ -477,6 +594,18 @@ async def dashboard():
         "avg_daily_net": _round(avg_daily_export - avg_daily_import),
         "recent": recent,
         "settings": settings_doc,
+        "solar": {
+            "has_solar": len(solar_rows) > 0,
+            "todays_solar": _round(todays_solar),
+            "todays_self_consumption": _round(todays_self),
+            "todays_house_consumption": _round(todays_house),
+            "total_solar": _round(total_solar),
+            "monthly_solar": _round(monthly_solar),
+            "total_self_consumption": _round(total_self_consumption),
+            "total_house_consumption": _round(total_house_consumption),
+            "avg_daily_solar": _round(avg_daily_solar),
+            "tracked_days": len(solar_rows),
+        },
         "billing": {
             "current": {
                 **current_cycle,
@@ -500,6 +629,10 @@ async def analytics():
             "import": r["import_unit"],
             "net": r["net_today"],
             "credit": r["credit_unit"],
+            "solar": r.get("solar_unit", 0.0),
+            "self_consumption": r.get("self_consumption", 0.0),
+            "house_consumption": r.get("house_consumption", 0.0),
+            "has_solar": bool(r.get("has_solar")),
         }
         for r in readings
     ]
@@ -508,19 +641,71 @@ async def analytics():
     for r in readings:
         key = r["date"][:7]
         m = monthly_map.setdefault(
-            key, {"month": key, "export": 0.0, "import": 0.0, "net": 0.0}
+            key,
+            {
+                "month": key,
+                "export": 0.0,
+                "import": 0.0,
+                "net": 0.0,
+                "solar": 0.0,
+                "self_consumption": 0.0,
+                "house_consumption": 0.0,
+            },
         )
         m["export"] += r["export_unit"]
         m["import"] += r["import_unit"]
         m["net"] += r["net_today"]
+        m["solar"] += r.get("solar_unit", 0.0)
+        m["self_consumption"] += r.get("self_consumption", 0.0)
+        m["house_consumption"] += r.get("house_consumption", 0.0)
 
     monthly = sorted(monthly_map.values(), key=lambda x: x["month"])
     for m in monthly:
-        m["export"] = _round(m["export"])
-        m["import"] = _round(m["import"])
-        m["net"] = _round(m["net"])
+        for k in ("export", "import", "net", "solar", "self_consumption", "house_consumption"):
+            m[k] = _round(m[k])
 
     return {"daily": daily, "monthly": monthly}
+
+
+@api.get("/solar")
+async def solar_analytics():
+    readings = await _all_readings_sorted()
+    solar_rows = [r for r in readings if r.get("has_solar")]
+
+    total_solar = sum(r.get("solar_unit", 0.0) for r in solar_rows)
+    total_export = sum(r.get("export_unit", 0.0) for r in solar_rows)
+    total_self = sum(r.get("self_consumption", 0.0) for r in solar_rows)
+    total_import = sum(r.get("import_unit", 0.0) for r in solar_rows)
+    total_house = sum(r.get("house_consumption", 0.0) for r in solar_rows)
+
+    grid_pct = (total_export / total_solar * 100) if total_solar > 0 else 0
+    self_pct = (total_self / total_solar * 100) if total_solar > 0 else 0
+
+    daily = [
+        {
+            "date": r["date"],
+            "solar": r.get("solar_unit", 0.0),
+            "grid_export": r.get("export_unit", 0.0),
+            "self_consumption": r.get("self_consumption", 0.0),
+            "grid_import": r.get("import_unit", 0.0),
+            "house_consumption": r.get("house_consumption", 0.0),
+        }
+        for r in solar_rows
+    ]
+
+    return {
+        "has_solar": len(solar_rows) > 0,
+        "tracked_days": len(solar_rows),
+        "total_solar": _round(total_solar),
+        "total_grid_export": _round(total_export),
+        "total_self_consumption": _round(total_self),
+        "total_grid_import": _round(total_import),
+        "total_house_consumption": _round(total_house),
+        "grid_export_pct": _round(grid_pct),
+        "self_consumption_pct": _round(self_pct),
+        "avg_daily_solar": _round(total_solar / max(1, len(solar_rows))),
+        "daily": daily,
+    }
 
 
 @api.get("/reports/monthly")
@@ -826,17 +1011,21 @@ async def seed_data(days: int = 30):
     today = date_cls.today()
     start_export = 8000.00
     start_import = 12300.00
+    start_solar = 12500.00  # inverter cumulative kWh baseline
 
     random.seed(42)
     docs: List[Dict[str, Any]] = []
     for i in range(days):
         d = today - timedelta(days=days - 1 - i)
-        # Daily solar export usually higher during sunny days
+        # Daily solar export to grid usually higher during sunny days
         daily_export = round(random.uniform(10.0, 26.0), 2)
         daily_import = round(random.uniform(1.5, 10.0), 2)
+        # Solar generation must be >= export (can't export more than you generate)
+        daily_solar = round(daily_export + random.uniform(4.0, 12.0), 2)
 
         start_export += daily_export
         start_import += daily_import
+        start_solar += daily_solar
 
         docs.append(
             {
@@ -852,6 +1041,13 @@ async def seed_data(days: int = 30):
                 "running_import": 0.0,
                 "credit_unit": 0.0,
                 "net_today": 0.0,
+                "previous_solar": 0.0,
+                "current_solar": round(start_solar, 2),
+                "solar_unit": 0.0,
+                "running_solar": 0.0,
+                "self_consumption": 0.0,
+                "house_consumption": 0.0,
+                "has_solar": True,
                 "notes": "",
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -864,6 +1060,7 @@ async def seed_data(days: int = 30):
         await _recalculate_chain(
             initial_export=8000.00,
             initial_import=12300.00,
+            initial_solar=12500.00,
         )
     # Reset billing cycles on seed and open a fresh cycle spanning the sample data.
     await BILLING.delete_many({})
