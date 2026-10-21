@@ -188,3 +188,41 @@ body {
         transform: translateY(0);
     }
 }
+
+/* ---------- Mobile / touch tweaks ---------- */
+html {
+    -webkit-text-size-adjust: 100%;
+}
+body {
+    overflow-x: hidden;
+}
+
+@media (max-width: 639px) {
+    /* 16px inputs stop iOS Safari from zooming on focus */
+    input,
+    select,
+    textarea,
+    [role="combobox"] {
+        font-size: 16px !important;
+    }
+    /* Keep table columns readable; the card scrolls horizontally */
+    table th,
+    table td {
+        white-space: nowrap;
+    }
+    /* Larger tap targets for outline/icon buttons */
+    button[data-testid$="page-btn"] {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    .hover-lift:hover {
+        transform: none;
+    }
+}
+
+/* Dialogs / popovers never overflow the screen */
+[role="dialog"] {
+    max-width: calc(100vw - 1.5rem);
+    max-height: 90dvh;
+    overflow-y: auto;
+}
