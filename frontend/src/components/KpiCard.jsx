@@ -62,7 +62,7 @@ const KpiCard = ({
       ) : (
         <div className="flex items-baseline gap-2">
           <div
-            className={`text-3xl md:text-[32px] font-bold tracking-tight leading-none ${
+            className={`text-2xl sm:text-3xl md:text-[32px] font-bold tracking-tight leading-none ${
               valueColor || "text-slate-900 dark:text-white"
             }`}
           >

@@ -147,7 +147,7 @@ const CreditTrendChart = ({ trend = [] }) => {
   }, [isDark]);
 
   return (
-    <div className="w-full h-[320px]" data-testid="credit-trend-chart">
+    <div className="w-full h-[240px] sm:h-[320px]" data-testid="credit-trend-chart">
       <Chart type="bar" data={data} options={options} />
     </div>
   );
