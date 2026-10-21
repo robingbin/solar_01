@@ -172,7 +172,7 @@ const Dashboard = () => {
 
           {/* Recent readings */}
           <div
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
             data-testid="recent-readings-card"
           >
             <div className="flex items-center justify-between mb-4">
@@ -185,7 +185,7 @@ const Dashboard = () => {
                 onClick={() => nav("/history")}
                 data-testid="view-all-readings-btn"
               >
-                View All Readings â
+                View All Readings →
               </Button>
             </div>
 
@@ -264,7 +264,7 @@ const Dashboard = () => {
         {/* Right column */}
         <div className="space-y-6">
           <div
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
             data-testid="credit-trend-card"
           >
             <div className="flex items-center justify-between mb-3">
@@ -309,7 +309,7 @@ const Dashboard = () => {
 
           {/* Today's summary */}
           <div
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
             data-testid="today-summary-card"
           >
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
@@ -331,7 +331,7 @@ const Dashboard = () => {
 
           {/* Quick actions */}
           <div
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
             data-testid="quick-actions-card"
           >
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
@@ -398,7 +398,7 @@ const BillingStatusCard = ({ billing, onOpen }) => {
 
   return (
     <div
-      className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+      className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
       data-testid="billing-status-card"
     >
       <div className="flex items-start justify-between mb-3">

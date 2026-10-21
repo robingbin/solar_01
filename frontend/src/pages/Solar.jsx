@@ -139,7 +139,7 @@ const Solar = () => {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div
-          className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+          className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
           data-testid="solar-daily-chart-card"
         >
           <div className="mb-4">
@@ -150,7 +150,7 @@ const Solar = () => {
               Stacked: how much of each day&apos;s generation was exported vs used at home
             </p>
           </div>
-          <div className="h-[340px]">
+          <div className="h-[260px] sm:h-[340px]">
             <Bar
               data={{
                 labels: dailyLabels,
@@ -184,7 +184,7 @@ const Solar = () => {
         </div>
 
         <div
-          className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800"
+          className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800"
           data-testid="solar-share-chart-card"
         >
           <div className="mb-4">
@@ -195,7 +195,7 @@ const Solar = () => {
               How your total solar was used
             </p>
           </div>
-          <div className="h-[280px] flex items-center justify-center">
+          <div className="h-[240px] sm:h-[280px] flex items-center justify-center">
             <Doughnut
               data={{
                 labels: ["Sent to Grid", "Self Consumption"],
@@ -238,7 +238,7 @@ const Solar = () => {
 
       {/* Table */}
       <div
-        className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800 overflow-x-auto"
+        className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800 overflow-x-auto"
         data-testid="solar-daily-table-card"
       >
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">

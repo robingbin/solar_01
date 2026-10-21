@@ -3,7 +3,7 @@ import { Sun, Github, Cpu, ShieldCheck } from "lucide-react";
 const About = () => {
   return (
     <div className="max-w-3xl space-y-6" data-testid="about-page">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 card-shadow border border-slate-100 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 sm:p-8 card-shadow border border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
             <Sun size={26} className="text-white" strokeWidth={2.5} />
@@ -29,7 +29,7 @@ const About = () => {
         <Feature icon={Github} tone="violet" title="Extensible" desc="Schema designed for ESP32, MQTT, WhatsApp, Telegram integrations." />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Version</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400">v1.0.0 · Built for the sun ☀️</p>
       </div>

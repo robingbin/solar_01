@@ -151,12 +151,12 @@ const Analytics = () => {
 };
 
 const ChartCard = ({ title, subtitle, children, testId }) => (
-  <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800" data-testid={testId}>
+  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800" data-testid={testId}>
     <div className="mb-4">
       <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
       <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
     </div>
-    <div className="h-[320px]">{children}</div>
+    <div className="h-[240px] sm:h-[320px]">{children}</div>
   </div>
 );
 

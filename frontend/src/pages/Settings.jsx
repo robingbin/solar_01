@@ -52,7 +52,7 @@ const Settings = () => {
 
   return (
     <div className="max-w-4xl space-y-6" data-testid="settings-page">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Owner & System</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {FIELDS.map((f) => (

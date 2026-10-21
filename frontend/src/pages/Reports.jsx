@@ -194,7 +194,7 @@ const Reports = () => {
             />
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800 overflow-x-auto" data-testid="report-table-card">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800 overflow-x-auto" data-testid="report-table-card">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">{title}</h3>
             {report.entries.length === 0 ? (
               <div className="py-8 text-center text-slate-500 dark:text-slate-400">No entries for this month.</div>

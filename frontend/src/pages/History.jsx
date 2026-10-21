@@ -85,7 +85,7 @@ const History = () => {
     <div className="space-y-4" data-testid="history-page">
       {/* Filter bar */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 card-shadow border border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
@@ -97,7 +97,7 @@ const History = () => {
           />
         </div>
         <Select value={String(month)} onValueChange={(v) => { setMonth(Number(v)); setPage(1); }}>
-          <SelectTrigger className="w-40 h-11" data-testid="history-month-filter">
+          <SelectTrigger className="w-[calc(50%-0.375rem)] sm:w-40 h-11" data-testid="history-month-filter">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
           <SelectContent>
@@ -107,7 +107,7 @@ const History = () => {
           </SelectContent>
         </Select>
         <Select value={String(year)} onValueChange={(v) => { setYear(Number(v)); setPage(1); }}>
-          <SelectTrigger className="w-32 h-11" data-testid="history-year-filter">
+          <SelectTrigger className="w-[calc(50%-0.375rem)] sm:w-32 h-11" data-testid="history-year-filter">
             <SelectValue placeholder="Year" />
           </SelectTrigger>
           <SelectContent>

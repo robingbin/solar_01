@@ -115,7 +115,7 @@ const Backup = () => {
         testId="backup-seed-btn"
       />
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800">
         <div className="flex items-start gap-4 mb-4">
           <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center">
             <Trash2 size={22} className="text-rose-500" />
@@ -169,7 +169,7 @@ const ActionCard = ({ icon: Icon, tone, title, desc, button, onClick, busy, test
     amber: "bg-amber-50 dark:bg-amber-500/10 text-amber-500",
   };
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 card-shadow border border-slate-100 dark:border-slate-800">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-6 card-shadow border border-slate-100 dark:border-slate-800">
       <div className="flex items-start gap-4 mb-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${tones[tone]}`}>
           <Icon size={22} />
