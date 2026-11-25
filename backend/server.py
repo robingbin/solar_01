@@ -12,11 +12,13 @@ safe to serialize to JSON without ObjectId acrobatics.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
 import os
 import random
+import re
 import uuid
 from datetime import date as date_cls
 from datetime import datetime, timedelta, timezone
@@ -1080,6 +1082,122 @@ async def wipe_all(keep_settings: bool = True):
 # ---------------------------------------------------------------------------
 # App wiring
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Meter photo scan (AI vision) -> pre-fills the reading form
+# ---------------------------------------------------------------------------
+
+SCAN_PROMPT = """You are reading a photo of an Indian electricity (TNEB / TNPDCL) net meter LCD.
+The display shows ONE cumulative energy register at a time, e.g. "0002773.6 kWh" with a small
+label "EXP" (export to grid) or "IMP" (import from grid) next to it. "CU" means cumulative.
+
+Rules:
+- Read the big 7-segment number exactly, including the decimal digit. Leading zeros don't matter.
+- label = "EXP" if the EXP indicator is lit, "IMP" if IMP is lit, otherwise "OTHER"
+  (other screens: kVArh, kVAh, MD, date/time, or a meter with no EXP/IMP indicator).
+- The unit must be kWh for EXP/IMP; if it's kVArh/kVAh/kW, use label "OTHER".
+- If the digits are blurred or cut off, set confidence to "low". Never guess digits silently.
+
+Reply with ONLY this JSON, no markdown:
+{"label": "EXP" | "IMP" | "OTHER", "value": <number or null>, "unit": "<unit text>", "confidence": "high" | "low", "note": "<short reason>"}"""
+
+
+class ScanIn(BaseModel):
+    images: List[str]  # base64 JPEG/PNG (data-URL prefix allowed)
+
+
+def _parse_scan_json(text: str) -> Dict[str, Any]:
+    m = re.search(r"\{.*\}", text or "", re.S)
+    if not m:
+        raise ValueError("no JSON in model reply")
+    data = json.loads(m.group(0))
+    label = str(data.get("label", "OTHER")).upper()
+    if label not in ("EXP", "IMP"):
+        label = "OTHER"
+    value = data.get("value")
+    try:
+        value = float(value) if value is not None else None
+    except (TypeError, ValueError):
+        value = None
+    return {
+        "label": label,
+        "value": value,
+        "unit": data.get("unit", ""),
+        "confidence": "high" if data.get("confidence") == "high" else "low",
+        "note": data.get("note", ""),
+    }
+
+
+async def _scan_one(image_b64: str, index: int) -> Dict[str, Any]:
+    from emergentintegrations.llm.chat import ImageContent, LlmChat, UserMessage
+
+    if "," in image_b64[:100]:  # strip "data:image/jpeg;base64,"
+        image_b64 = image_b64.split(",", 1)[1]
+    chat = LlmChat(
+        api_key=os.environ["EMERGENT_LLM_KEY"],
+        session_id=f"meter-scan-{uuid.uuid4()}",
+        system_message="You read electricity meter displays precisely and reply with JSON only.",
+    ).with_model(
+        os.environ.get("SCAN_LLM_PROVIDER", "gemini"),
+        os.environ.get("SCAN_LLM_MODEL", "gemini-2.5-flash"),
+    )
+    try:
+        reply = await chat.send_message(
+            UserMessage(text=SCAN_PROMPT, file_contents=[ImageContent(image_base64=image_b64)])
+        )
+        result = _parse_scan_json(reply)
+    except Exception as exc:  # one bad photo shouldn't fail the whole scan
+        logger.warning("scan failed for image %s: %s", index, exc)
+        result = {"label": "OTHER", "value": None, "unit": "", "confidence": "low",
+                  "note": "Could not read this photo"}
+    result["index"] = index
+    return result
+
+
+@api.post("/readings/scan")
+async def scan_readings(payload: ScanIn):
+    if not os.environ.get("EMERGENT_LLM_KEY"):
+        raise HTTPException(503, "Photo scan is not configured (EMERGENT_LLM_KEY missing)")
+    if not payload.images:
+        raise HTTPException(400, "No photos received")
+    if len(payload.images) > 6:
+        raise HTTPException(400, "Send at most 6 photos")
+
+    results = await asyncio.gather(
+        *[_scan_one(img, i) for i, img in enumerate(payload.images)]
+    )
+
+    def pick(label: str) -> Optional[Dict[str, Any]]:
+        found = [r for r in results if r["label"] == label and r["value"] is not None]
+        found.sort(key=lambda r: r["confidence"] != "high")  # prefer high confidence
+        return found[0] if found else None
+
+    exp, imp = pick("EXP"), pick("IMP")
+
+    # Sanity checks against the last saved reading
+    warnings: List[str] = []
+    latest = await READINGS.find_one({}, {"_id": 0}, sort=[("date", -1)])
+    for name, hit, key in (("Export", exp, "current_export"), ("Import", imp, "current_import")):
+        if not hit:
+            warnings.append(f"{name} screen not found in the photos")
+            continue
+        if hit["confidence"] == "low":
+            warnings.append(f"{name} reading is unclear — please double-check")
+        if latest:
+            prev = float(latest.get(key) or 0)
+            diff = hit["value"] - prev
+            if diff < 0:
+                warnings.append(f"{name} {hit['value']} is lower than last reading {prev}")
+            elif diff > 200:
+                warnings.append(f"{name} jumped {diff:.1f} units since last reading — check it")
+
+    return {
+        "current_export": exp["value"] if exp else None,
+        "current_import": imp["value"] if imp else None,
+        "photos": results,
+        "warnings": warnings,
+    }
 
 
 @api.get("/")

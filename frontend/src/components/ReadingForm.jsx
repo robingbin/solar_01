@@ -1,5 +1,13 @@
-import { useEffect, useState } from "react";
-import { Calendar as CalendarIcon, RefreshCw, Calculator, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Calendar as CalendarIcon,
+  RefreshCw,
+  Calculator,
+  Save,
+  Camera,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +27,27 @@ const toISO = (d) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
+
+// Shrink phone photos (often 3-5 MB) to ~1600px JPEG before upload.
+const fileToSmallJpeg = (file, maxSide = 1600) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
 
 const ReadingForm = ({ onSaved, editing }) => {
   const [date, setDate] = useState(editing?.date || todayISO());
@@ -41,6 +70,33 @@ const ReadingForm = ({ onSaved, editing }) => {
   const [initSolar, setInitSolar] = useState("");
   const [saving, setSaving] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleScanFiles = async (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 6);
+    e.target.value = ""; // allow picking the same photos again
+    if (!files.length) return;
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const images = await Promise.all(files.map((f) => fileToSmallJpeg(f)));
+      const { data } = await http.post("/readings/scan", { images }, { timeout: 90000 });
+      if (data.current_export != null) setCurrentExport(String(data.current_export));
+      if (data.current_import != null) setCurrentImport(String(data.current_import));
+      setScanResult(data);
+      const found = [data.current_export != null && "Export", data.current_import != null && "Import"]
+        .filter(Boolean)
+        .join(" & ");
+      if (found) toast.success(`${found} filled from photo — check and save`);
+      else toast.error("Couldn't find EXP/IMP screens in these photos");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Scan failed — enter manually");
+    } finally {
+      setScanning(false);
+    }
+  };
 
   useEffect(() => {
     if (editing) {
@@ -111,6 +167,7 @@ const ReadingForm = ({ onSaved, editing }) => {
     (solarProvided && needsInitSolar && !initSolar);
 
   const handleReset = () => {
+    setScanResult(null);
     setCurrentExport(editing ? String(editing.current_export) : "");
     setCurrentImport(editing ? String(editing.current_import) : "");
     setCurrentSolar(editing && editing.current_solar ? String(editing.current_solar) : "");
@@ -194,6 +251,61 @@ const ReadingForm = ({ onSaved, editing }) => {
             />
           </PopoverContent>
         </Popover>
+      </div>
+
+      <div className="mb-5 rounded-xl border border-dashed border-blue-300 dark:border-blue-500/40 bg-blue-50/50 dark:bg-blue-500/5 p-4">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleScanFiles}
+          data-testid="reading-scan-input"
+        />
+        <Button
+          type="button"
+          className="w-full h-12 gap-2 bg-blue-600 hover:bg-blue-700 text-white text-base"
+          disabled={scanning}
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="reading-scan-btn"
+        >
+          {scanning ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
+          {scanning ? "Reading meter photos..." : "Scan meter photos"}
+        </Button>
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 text-center">
+          Take or pick the EXP and IMP screen photos together — numbers fill in automatically.
+        </div>
+
+        {scanResult && (
+          <div className="mt-3 space-y-2" data-testid="reading-scan-result">
+            <div className="flex flex-wrap gap-2">
+              {scanResult.photos.map((p) => (
+                <span
+                  key={p.index}
+                  className={`text-xs font-semibold rounded-md px-2 py-1 mono ${
+                    p.label === "EXP"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                      : p.label === "IMP"
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  }`}
+                >
+                  Photo {p.index + 1}: {p.label === "OTHER" ? "skipped" : `${p.label} ${p.value}`}
+                  {p.confidence === "low" && p.label !== "OTHER" ? " ?" : ""}
+                </span>
+              ))}
+            </div>
+            {scanResult.warnings.map((w) => (
+              <div
+                key={w}
+                className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+              >
+                <AlertTriangle size={14} className="mt-px shrink-0" /> {w}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {needsInit && (
